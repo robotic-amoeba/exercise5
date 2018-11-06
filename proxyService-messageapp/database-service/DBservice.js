@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const debug = require("debug")("debug:DBservice");
-let retryCount = 5;
 const DB = require("./DBmanager");
+let retryCount = 5;
 
 class DBservice {
   constructor(config) {
@@ -10,15 +10,16 @@ class DBservice {
     this.messagePrice = config.messagePrice;
     this.creditBalance = config.initialCredit;
     this.accountID = config.accountID;
+    this.isMainDB = config.isMainDB;
     this.connection = mongoose
       .createConnection(config.DBurl, { useNewUrlParser: true })
       .then(connection => {
         console.log("Connected to :", connection.name);
         this.Message = require("./models/Message")(connection);
         this.Account = require("./models/Account")(connection);
-        console.log("entra");
         connection.on("disconnected", () => {
-          this.disconectionHandling();
+          debugger;
+          DB.handleDisconnection(this.isMainDB, this.accountID);
         });
         this.setInitialBalance(this.accountID);
         return connection;
@@ -101,11 +102,9 @@ class DBservice {
     const accountID = this.accountID;
     const price = this.messagePrice;
     const finalBalance = this.creditBalance - price;
-    return this.Account.findOneAndUpdate(
-      { accountID },
-      { credit: finalBalance },
-      { new: true }
-    ).catch(e => console.log(e));
+    return this.Account.findOneAndUpdate({ accountID }, { credit: finalBalance })
+      .then()
+      .catch(e => console.log(e));
   }
 
   incrementCredit(deposit) {
@@ -138,6 +137,17 @@ class DBservice {
     return this.Account.findOneAndUpdate({ accountID }, { locked: false })
       .then(() => debug("Unlocked"))
       .catch(e => console.log(e));
+  }
+
+  undoCharge(chargeMessage) {
+    //chargeMessage contains the old DB object
+    accountID = this.accountID;
+    this.Account.findOneAndUpdate({ accountID }, chargeMessage);
+  }
+
+  undoDeposit(deposit, oldAccount) {
+    accountID = this.accountID;
+    this.Account.findOneAndUpdate({ accountID }, oldAccount);
   }
 }
 

@@ -49,6 +49,7 @@ function handleMessagingOperation(req, res) {
   const message = conformInitialMessage(destination, body, messageID);
 
   const storeInDB = DB.myDBservice().createMessageAttempt(message);
+  DB.myDBbackup().createMessageAttempt(message);
   const creditEnough = DB.myDBservice().checkIfEnoughCredit();
 
   Promise.all([storeInDB, creditEnough])
@@ -61,17 +62,31 @@ function handleMessagingOperation(req, res) {
               messageID,
               messageStatus.status
             );
+            DB.myDBbackup().updateMessageStatus(messageID, messageStatus.status);
             const chargeMessage = DB.myDBservice().chargeMessageInAccount();
 
-            Promise.all([updateStatus, chargeMessage]).then(() => {
-              DB.myDBservice().unlockAccount();
-              res.status(200).send(messageStatus.status);
-            });
+            Promise.all([updateStatus, chargeMessage])
+              .then(() => {
+                DB.myDBbackup()
+                  .chargeMessageInAccount()
+                  .then(() => {
+                    res.status(200).send(messageStatus.status);
+                    DB.myDBservice().unlockAccount();
+                  })
+                  .catch(() => {
+                    DB.myDBservice.undoCharge(chargeMessage);
+                    DB.myDBservice().unlockAccount();
+                  });
+              })
+              .catch(error => {
+                debug("error: ", error);
+              });
           } else {
             DB.myDBservice()
               .updateMessageStatus(messageID, messageStatus.status)
               .then(() => {
                 DB.myDBservice().unlockAccount();
+                DB.myDBbackup().updateMessageStatus(messageID, messageStatus.status);
                 res.status(500).send(messageStatus.status);
               });
           }
