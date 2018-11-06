@@ -2,9 +2,7 @@ const express = require("express");
 const router = express.Router();
 const debug = require("debug")("debug:messaging");
 
-const DB = require("../database-service/DBservice");
-const myDBservice = DB.myDBservice;
-const myDBbackup = DB.myDBbackup;
+const DB = require("../database-service/DBmanager");
 const uuidv1 = require("uuid/v1");
 
 const axios = require("axios");
@@ -22,8 +20,9 @@ router.post("/", (req, res) => {
     return;
   }
 
-  //myDBservice.unlockAccount();
-  myDBservice
+  //DB.myDBservice().unlockAccount();
+  debugger;
+  DB.myDBservice()
     .checkAccountLock()
     .then(account => {
       if (account.locked) {
@@ -36,7 +35,7 @@ router.post("/", (req, res) => {
 });
 
 router.get("/", (req, res, next) => {
-  myDBservice
+  DB.myDBservice()
     .getMessages()
     .then(messages => {
       res.status(200).send(messages);
@@ -49,28 +48,32 @@ function handleMessagingOperation(req, res) {
   const messageID = uuidv1();
   const message = conformInitialMessage(destination, body, messageID);
 
-  const storeInDB = myDBservice.createMessageAttempt(message);
-  const creditEnough = myDBservice.checkIfEnoughCredit();
+  const storeInDB = DB.myDBservice().createMessageAttempt(message);
+  const creditEnough = DB.myDBservice().checkIfEnoughCredit();
 
   Promise.all([storeInDB, creditEnough])
-
     .then(results => {
       if (results[0] && results[1]) {
         return reqToMessageAPP(destination, body).then(messageStatus => {
           debug(messageStatus);
           if ((messageStatus.code = "OK")) {
-            const updateStatus = myDBservice.updateMessageStatus(messageID, messageStatus.status);
-            const chargeMessage = myDBservice.chargeMessageInAccount();
+            const updateStatus = DB.myDBservice().updateMessageStatus(
+              messageID,
+              messageStatus.status
+            );
+            const chargeMessage = DB.myDBservice().chargeMessageInAccount();
 
             Promise.all([updateStatus, chargeMessage]).then(() => {
-              myDBservice.unlockAccount();
+              DB.myDBservice().unlockAccount();
               res.status(200).send(messageStatus.status);
             });
           } else {
-            myDBservice.updateMessageStatus(messageID, messageStatus.status).then(() => {
-              myDBservice.unlockAccount();
-              res.status(500).send(messageStatus.status);
-            });
+            DB.myDBservice()
+              .updateMessageStatus(messageID, messageStatus.status)
+              .then(() => {
+                DB.myDBservice().unlockAccount();
+                res.status(500).send(messageStatus.status);
+              });
           }
         });
       } else {
@@ -84,7 +87,7 @@ function handleMessagingOperation(req, res) {
 }
 
 function handleRetriesOnMessaging(retries, req, res) {
-  myDBservice
+  DB.myDBservice()
     .checkAccountLock()
     .then(account => {
       if (account.locked && retries !== 0) {

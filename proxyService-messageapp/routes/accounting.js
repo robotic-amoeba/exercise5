@@ -1,14 +1,11 @@
 const express = require("express");
 const router = express.Router();
-
-const DB = require("../database-service/DBservice");
-const myDBservice = DB.myDBservice;
-const myDBbackup = DB.myDBbackup;
+const DB = require("../database-service/DBmanager");
 //add security meassures here!
 
 router.post("/", (req, res, next) => {
   const deposit = req.body.amount;
-  myDBservice
+  DB.myDBservice()
     .incrementCredit(deposit)
     .then(() => {
       res.status(200).send("Balanced updated");

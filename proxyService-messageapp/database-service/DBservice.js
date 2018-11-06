@@ -1,21 +1,27 @@
 const mongoose = require("mongoose");
 const debug = require("debug")("debug:DBservice");
 let retryCount = 5;
+const DB = require("./DBmanager");
 
 class DBservice {
-  constructor(DBurl, accountID, messagePrice, initialCredit) {
+  constructor(config) {
     this.Message;
     this.Account;
-    this.messagePrice = messagePrice;
-    this.creditBalance = initialCredit;
-    this.accountID = accountID;
-    this.conection = mongoose
-      .createConnection(DBurl, { useNewUrlParser: true })
+    this.messagePrice = config.messagePrice;
+    this.creditBalance = config.initialCredit;
+    this.accountID = config.accountID;
+    this.connection = mongoose
+      .createConnection(config.DBurl, { useNewUrlParser: true })
       .then(connection => {
         console.log("Connected to :", connection.name);
         this.Message = require("./models/Message")(connection);
         this.Account = require("./models/Account")(connection);
+        console.log("entra");
+        connection.on("disconnected", () => {
+          this.disconectionHandling();
+        });
         this.setInitialBalance(this.accountID);
+        return connection;
       })
       .catch(err => {
         console.error("Error connecting to mongo", err);
@@ -135,13 +141,4 @@ class DBservice {
   }
 }
 
-const myDBbackup = new DBservice(
-  "mongodb://localhost:27019/messagingCabifyBackup",
-  "BackupDB",
-  1,
-  5
-);
-const myDBservice = new DBservice("mongodb://localhost:27018/messagingCabify", "MainDB", 1, 5);
-
-const DB = { DBservice, myDBservice, myDBbackup };
-module.exports = DB;
+module.exports = DBservice;

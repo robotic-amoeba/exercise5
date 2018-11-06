@@ -2,6 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
 const PORT = 9001;
+const DB = require("./database-service/DBmanager");
 const rateLimit = require("express-rate-limit");
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -27,5 +28,6 @@ app.use(function(err, req, res, next) {
   }
 });
 
+DB.initiateDBnodes();
 app.listen(PORT);
 console.log(`Running on http://localhost:${PORT}`);
