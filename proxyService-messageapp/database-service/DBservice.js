@@ -1,31 +1,30 @@
 const mongoose = require("mongoose");
-const Message = require("./models/Message");
-const Account = require("./models/Account");
 const debug = require("debug")("debug:DBservice");
 let retryCount = 5;
 
 class DBservice {
   constructor(DBurl, accountID, messagePrice, initialCredit) {
+    this.Message;
+    this.Account;
+    this.messagePrice = messagePrice;
+    this.creditBalance = initialCredit;
+    this.accountID = accountID;
     this.conection = mongoose
-      .connect(
-        DBurl,
-        { useNewUrlParser: true }
-      )
-      .then(x => {
-        console.log(`Connected to Mongo! Database name: "${x.connections[0].name}"`);
+      .createConnection(DBurl, { useNewUrlParser: true })
+      .then(connection => {
+        console.log("Connected to :", connection.name);
+        this.Message = require("./models/Message")(connection);
+        this.Account = require("./models/Account")(connection);
+        this.setInitialBalance(this.accountID);
       })
       .catch(err => {
         console.error("Error connecting to mongo", err);
       });
-    this.messagePrice = messagePrice;
-    this.creditBalance = initialCredit;
-    this.accountID = accountID;
-    this.setInitialBalance(this.accountID);
   }
 
   createMessageAttempt(message) {
     const { destination, body, messageID, status } = message;
-    return Message.create({
+    return this.Message.create({
       destination,
       body,
       messageID,
@@ -48,7 +47,7 @@ class DBservice {
   }
 
   updateMessageStatus(messageID, messageStatus) {
-    return Message.findOneAndUpdate({ messageID }, { status: messageStatus }, { new: true })
+    return this.Message.findOneAndUpdate({ messageID }, { status: messageStatus }, { new: true })
       .then(data => {
         debug("updated entry: ", data);
       })
@@ -56,16 +55,16 @@ class DBservice {
   }
 
   getMessages() {
-    return Message.find().catch(e => console.log(e));
+    return this.Message.find().catch(e => console.log(e));
   }
 
   setInitialBalance(accountID) {
-    return Account.findOne({ accountID }).then(wallet => {
+    return this.Account.findOne({ accountID }).then(wallet => {
       if (wallet) {
         debug("Wallet found in DB: ", wallet);
         return;
       } else {
-        return Account.create({
+        return this.Account.create({
           accountID: this.accountID,
           credit: this.creditBalance,
           locked: false
@@ -80,7 +79,7 @@ class DBservice {
 
   checkIfEnoughCredit() {
     const accountID = this.accountID;
-    return Account.findOne({ accountID }).then(wallet => {
+    return this.Account.findOne({ accountID }).then(wallet => {
       if (wallet.credit >= this.messagePrice) {
         this.creditBalance = wallet.credit;
         debug("Enough credit found: ", wallet.credit);
@@ -96,18 +95,20 @@ class DBservice {
     const accountID = this.accountID;
     const price = this.messagePrice;
     const finalBalance = this.creditBalance - price;
-    return Account.findOneAndUpdate({ accountID }, { credit: finalBalance }, { new: true }).catch(
-      e => console.log(e)
-    );
+    return this.Account.findOneAndUpdate(
+      { accountID },
+      { credit: finalBalance },
+      { new: true }
+    ).catch(e => console.log(e));
   }
 
   incrementCredit(deposit) {
     const accountID = this.accountID;
-    return Account.findOneAndUpdate({ accountID }, { locked: true }, { new: true })
+    return this.Account.findOneAndUpdate({ accountID }, { locked: true }, { new: true })
       .then(wallet => {
         const oldBalance = wallet.credit;
         const newBalance = oldBalance + deposit;
-        Account.findOneAndUpdate(
+        this.Account.findOneAndUpdate(
           { accountID },
           { credit: newBalance, locked: false },
           { new: true }
@@ -118,7 +119,7 @@ class DBservice {
 
   checkAccountLock() {
     const accountID = this.accountID;
-    return Account.findOneAndUpdate({ accountID }, { locked: true })
+    return this.Account.findOneAndUpdate({ accountID }, { locked: true })
       .then(oldAccount => {
         debug("Check if lock: ", oldAccount.locked);
         return oldAccount;
@@ -128,18 +129,19 @@ class DBservice {
 
   unlockAccount() {
     const accountID = this.accountID;
-    return Account.findOneAndUpdate({ accountID }, { locked: false })
+    return this.Account.findOneAndUpdate({ accountID }, { locked: false })
       .then(() => debug("Unlocked"))
       .catch(e => console.log(e));
   }
 }
 
-const myDBservice = new DBservice(
-  "mongodb://localhost:27017/messagingCabify",
-  "secretAndUniqueIDHere",
+const myDBbackup = new DBservice(
+  "mongodb://localhost:27019/messagingCabifyBackup",
+  "BackupDB",
   1,
   5
 );
+const myDBservice = new DBservice("mongodb://localhost:27018/messagingCabify", "MainDB", 1, 5);
 
-const DB = { DBservice, myDBservice };
+const DB = { DBservice, myDBservice, myDBbackup };
 module.exports = DB;

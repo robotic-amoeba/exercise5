@@ -17,10 +17,10 @@ services:
     volumes:
       - ./data/db:/data/db
     ports:
-      - "28017:28017"
+      - "27018:27017"
   mongodb-backup:
     image: "mongo"
     volumes:
       - ./data-backup/db:/data/db
     ports:
-      - "28018:28018"
+      - "27019:27017"

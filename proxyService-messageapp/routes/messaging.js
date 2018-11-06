@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
+const debug = require("debug")("debug:messaging");
 
 const DB = require("../database-service/DBservice");
 const myDBservice = DB.myDBservice;
+const myDBbackup = DB.myDBbackup;
 const uuidv1 = require("uuid/v1");
 
 const axios = require("axios");
@@ -55,7 +57,7 @@ function handleMessagingOperation(req, res) {
     .then(results => {
       if (results[0] && results[1]) {
         return reqToMessageAPP(destination, body).then(messageStatus => {
-          console.log(messageStatus);
+          debug(messageStatus);
           if ((messageStatus.code = "OK")) {
             const updateStatus = myDBservice.updateMessageStatus(messageID, messageStatus.status);
             const chargeMessage = myDBservice.chargeMessageInAccount();
@@ -87,7 +89,7 @@ function handleRetriesOnMessaging(retries, req, res) {
     .then(account => {
       if (account.locked && retries !== 0) {
         retries--;
-        console.log("retrying in handle");
+        debug("retrying in handle");
         setTimeout(() => {
           handleRetriesOnMessaging(retries, req, res);
         }, 1000);
@@ -144,7 +146,7 @@ function reqToMessageAPP(destination, body) {
         customError = "Server error";
         messageStatus = { code: "KO", status: "Not sent" };
       }
-      console.log(customError);
+      debug(customError);
       return messageStatus;
     });
 }
