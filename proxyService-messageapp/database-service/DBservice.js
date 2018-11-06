@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Message = require("./models/Message");
 const Account = require("./models/Account");
+const debug = require("debug")("debug:DBservice");
 let retryCount = 5;
 
 class DBservice {
@@ -31,13 +32,12 @@ class DBservice {
       status
     })
       .then(data => {
-        //console.log("created entry: ", data);
         return true;
       })
       .catch(error => {
         if (retryCount > 0) {
           retryCount -= 1;
-          console.log(retryCount);
+          debug(retryCount);
           this.createMessageAttempt(message);
         } else {
           console.log("MONGO Error: ", error);
@@ -50,7 +50,7 @@ class DBservice {
   updateMessageStatus(messageID, messageStatus) {
     return Message.findOneAndUpdate({ messageID }, { status: messageStatus }, { new: true })
       .then(data => {
-        console.log("updated entry: ", data);
+        debug("updated entry: ", data);
       })
       .catch(e => console.log(e));
   }
@@ -62,7 +62,7 @@ class DBservice {
   setInitialBalance(accountID) {
     return Account.findOne({ accountID }).then(wallet => {
       if (wallet) {
-        //console.log("Wallet found in DB: ", wallet);
+        debug("Wallet found in DB: ", wallet);
         return;
       } else {
         return Account.create({
@@ -71,7 +71,7 @@ class DBservice {
           locked: false
         })
           .then(data => {
-            //console.log("Opened new wallet: ", data);
+            debug("Opened new wallet: ", data);
           })
           .catch(e => console.log(e));
       }
@@ -83,10 +83,10 @@ class DBservice {
     return Account.findOne({ accountID }).then(wallet => {
       if (wallet.credit >= this.messagePrice) {
         this.creditBalance = wallet.credit;
-        console.log("Enough credit found: ", wallet.credit);
+        debug("Enough credit found: ", wallet.credit);
         return true;
       } else {
-        console.log("Not enough credit");
+        debug("Not enough credit");
         return false;
       }
     });
@@ -111,7 +111,7 @@ class DBservice {
           { accountID },
           { credit: newBalance, locked: false },
           { new: true }
-        ).then(newWallet => console.log("New balance in account: ", newWallet.credit));
+        ).then(newWallet => debug("New balance in account: ", newWallet.credit));
       })
       .catch(e => console.log(e));
   }
@@ -120,7 +120,7 @@ class DBservice {
     const accountID = this.accountID;
     return Account.findOneAndUpdate({ accountID }, { locked: true })
       .then(oldAccount => {
-        console.log("Check if lock: ", oldAccount.locked);
+        debug("Check if lock: ", oldAccount.locked);
         return oldAccount;
       })
       .catch(e => console.log(e));
@@ -129,11 +129,17 @@ class DBservice {
   unlockAccount() {
     const accountID = this.accountID;
     return Account.findOneAndUpdate({ accountID }, { locked: false })
-      .then(() => console.log("Unlocked"))
+      .then(() => debug("Unlocked"))
       .catch(e => console.log(e));
   }
 }
 
-const accountID = "secretAndUniqueIDHere";
-const myDBservice = new DBservice("mongodb://localhost:27017/messagingCabify", accountID, 1, 5);
-module.exports = myDBservice;
+const myDBservice = new DBservice(
+  "mongodb://localhost:27017/messagingCabify",
+  "secretAndUniqueIDHere",
+  1,
+  5
+);
+
+const DB = { DBservice, myDBservice };
+module.exports = DB;

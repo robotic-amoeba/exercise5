@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
 
-const myDBservice = require("../database-service/DBservice");
+const DB = require("../database-service/DBservice");
+const myDBservice = DB.myDBservice;
 
 //add security meassures here!
 
